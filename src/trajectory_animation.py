@@ -5,6 +5,8 @@ import matplotlib.animation as animation
 from .point import Point
 from .velocity_arrow import VelocityArrow
 from .acceleration_arrow import AccelerationArrow
+from .radius_vector import RadiusVector
+from .curvature_radius import CurvatureRadius
 
 
 class TrajectoryAnimation:
@@ -60,6 +62,8 @@ class TrajectoryAnimation:
         self.ax.plot(self.X, self.Y, 'r-', lw=1)
         self.velocity_arrow = VelocityArrow(self.ax)
         self.acceleration_arrow = AccelerationArrow(self.ax)
+        self.radius_vector = RadiusVector(self.ax)
+        self.curvature_radius = CurvatureRadius(self.ax)
 
     def create_animation(self):
         self.ani = animation.FuncAnimation(self.fig, self.update, frames=len(self.T),
@@ -69,7 +73,13 @@ class TrajectoryAnimation:
         self.point.set_data([], [])
         self.velocity_arrow.set_data(0, 0, 0, 0)
         self.acceleration_arrow.set_data(0, 0, 0, 0)
-        return self.point.point, self.velocity_arrow.line, self.velocity_arrow.arrow_head.arrow_line, self.acceleration_arrow.line, self.acceleration_arrow.arrow_head.arrow_line
+        self.radius_vector.set_data(0, 0)
+        self.curvature_radius.set_data(0, 0, 0, 0, 0, 0)
+        return (self.point.point,
+                self.velocity_arrow.line, self.velocity_arrow.arrow_head.arrow_line,
+                self.acceleration_arrow.line, self.acceleration_arrow.arrow_head.arrow_line,
+                self.radius_vector.line, self.radius_vector.arrow_head.arrow_line,
+                self.curvature_radius.line, self.curvature_radius.arrow_head.arrow_line)
 
     def update(self, frame):
         self.point.set_data(self.X[frame], self.Y[frame])
@@ -77,5 +87,13 @@ class TrajectoryAnimation:
                                      self.VX[frame], self.VY[frame])
         self.acceleration_arrow.set_data(self.X[frame], self.Y[frame],
                                          self.AX[frame], self.AY[frame])
+        self.radius_vector.set_data(self.X[frame], self.Y[frame])
+        self.curvature_radius.set_data(self.X[frame], self.Y[frame],
+                                       self.VX[frame], self.VY[frame],
+                                       self.AX[frame], self.AY[frame])
 
-        return self.point.point, self.velocity_arrow.line, self.velocity_arrow.arrow_head.arrow_line, self.acceleration_arrow.line, self.acceleration_arrow.arrow_head.arrow_line
+        return (self.point.point,
+                self.velocity_arrow.line, self.velocity_arrow.arrow_head.arrow_line,
+                self.acceleration_arrow.line, self.acceleration_arrow.arrow_head.arrow_line,
+                self.radius_vector.line, self.radius_vector.arrow_head.arrow_line,
+                self.curvature_radius.line, self.curvature_radius.arrow_head.arrow_line)
