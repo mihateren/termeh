@@ -1,83 +1,108 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-
-fig = plt.figure()
-gr = fig.add_subplot(1, 1, 1)
-gr.axis('equal')
-
-# Дано:
-a = b = l0 = 1
-DE = 2 * a
-
-# Задаю функции phi(t) и psi(t)
-
-step = 3000
-
-t = np.linspace(0, 10, step)
-phi = 2 * np.sin(6 * t)
-psi = 5 * t + 0.2 * np.cos(6 * t)
+import sympy as sp
+import math
 
 
-# Балка DE
-Xd = 0
-Yd = 0
-
-Xe = Xd + DE * np.cos(phi)
-Ye = Yd + DE * np.sin(phi)
-
-balkaDE = gr.plot([Xd, Xe[0]], [Yd, Ye[0]], color='black', linewidth=5)[0]
-pD = gr.plot(Xd, Yd, marker='o', color='r')[0]
-pE = gr.plot(Xe, Ye, marker='o', color='r')[0]
-
-# Пружина
-
-Xc = DE
-Yc = l0
-
-pC = gr.plot(Xc, Yc, marker='o', color='r')[0]
+def Rot2D(X, Y, Alpha):
+    RX = X * np.cos(Alpha) - Y * np.sin(Alpha)
+    RY = X * np.sin(Alpha) + Y * np.cos(Alpha)
+    return RX, RY
 
 
-def get_spring(coils, width, start, end):
-    start, end = np.array(start).reshape((2,)), np.array(end).reshape((2,))
-    len = np.linalg.norm(np.subtract(end, start))
-    u_t = np.subtract(end, start) / len
-    u_n = np.array([[0, -1], [1, 0]]).dot(u_t)
-    spring_coords = np.zeros((2, coils + 2))
-    spring_coords[:, 0], spring_coords[:, -1] = start, end
-    normal_dist = np.sqrt(max(0, width ** 2 - (len ** 2 / coils ** 2))) / 2
-    for i in np.arange(1, coils + 1):
-        spring_coords[:, -i] = (start
-                                + ((len * (2 * i - 1) * u_t) / (2 * coils))
-                                + (normal_dist * (-1) ** i * u_n))
-    return spring_coords[0, 2:], spring_coords[1, 2:]
+R = 5
+l = 3
+r = math.sqrt(R * R - l * l)
 
 
-pS = gr.plot(*get_spring(70, 0.1, [Xe[0], Ye[0]], [Xc, Yc]), color='black')[0]
-
-# Стержень AB
-
-Xa = Xd + DE / 2 * np.cos(phi)
-Ya = Yd + DE / 2 * np.sin(phi)
-
-Xb = Xa + b * np.cos(psi - np.pi / 2)
-Yb = Ya + b * np.sin(psi - np.pi / 2)
-
-sterjenAB = gr.plot([Xa[0], Xb[0]], [Ya[0], Yb[0]],
-                    color='black', linewidth=1)[0]
-pA = gr.plot(Xa, Ya, marker='o', color='r')[0]
-pB = gr.plot(Xb, Yb, marker='o', color='black', markersize=20)[0]
+t = sp.Symbol('t')
 
 
-def run(i):
-    balkaDE.set_data([Xd, Xe[i]], [Yd, Ye[i]])
-    pE.set_data(Xe[i], Ye[i])
-    pS.set_data(*get_spring(70, 0.1, [Xe[i], Ye[i]], [Xc, Yc]))
-    pA.set_data(Xa[i], Ya[i])
-    pB.set_data(Xb[i], Yb[i])
-    sterjenAB.set_data([Xa[i], Xb[i]], [Ya[i], Yb[i]])
+phi = 0.3 * t
+ksi = 0.5 * t
 
 
-anim = FuncAnimation(fig, run, frames=step, interval=1)
+x_O = -R * sp.sin(phi)
+y_O = R * sp.cos(phi)
+
+
+x_C = x_O - r * sp.sin(ksi)
+y_C = y_O + r * sp.cos(ksi)
+
+
+x_rel = -r * sp.sin(ksi)
+y_rel = r * sp.cos(ksi)
+
+
+Vx_C = sp.diff(x_C, t)
+Vy_C = sp.diff(y_C, t)
+V_mod_C = sp.sqrt(Vx_C**2 + Vy_C**2)
+
+
+Ax_C = sp.diff(x_C, t, 2)
+Ay_C = sp.diff(y_C, t, 2)
+A_mod_C = sp.sqrt(Ax_C**2 + Ay_C**2)
+
+
+T = np.linspace(0, 45, 1000)
+X_O_def = sp.lambdify(t, x_O, modules='numpy')
+Y_O_def = sp.lambdify(t, y_O, modules='numpy')
+X_C_def = sp.lambdify(t, x_C, modules='numpy')
+Y_C_def = sp.lambdify(t, y_C, modules='numpy')
+X_REL_def = sp.lambdify(t, x_rel, modules='numpy')
+Y_REL_def = sp.lambdify(t, y_rel, modules='numpy')
+
+
+X_O = X_O_def(T)
+Y_O = Y_O_def(T)
+X_C = X_C_def(T)
+Y_C = Y_C_def(T)
+X_REL = X_REL_def(T)
+Y_REL = Y_REL_def(T)
+
+
+fig = plt.figure(figsize=(10, 8))
+
+ax1 = fig.add_subplot(1, 1, 1)
+ax1.set_aspect('equal')
+ax1.set_xlim([-10, 10])
+ax1.set_ylim([-20, 20])
+ax1.set_xlabel('Ось x')
+ax1.set_ylabel('Ось y')
+ax1.invert_xaxis()
+ax1.invert_yaxis()
+ax1.grid(True)
+
+
+PointO1, = ax1.plot([0], [0], 'bo')
+Circ_Angle = np.linspace(0, 2 * np.pi, 100)
+Circ, = ax1.plot(X_O[0] + R * np.cos(Circ_Angle), Y_O[0] +
+                 R * np.sin(Circ_Angle), 'g')
+ArrowX = np.array([0, 0, 0])
+ArrowY = np.array([l, 0, -l])
+R_Stick_ArrowX, R_Stick_ArrowY = Rot2D(
+    ArrowX, ArrowY, math.atan2(Y_REL[0], X_REL[0]))
+Stick_Arrow, = ax1.plot(
+    R_Stick_ArrowX + X_C[0], R_Stick_ArrowY + Y_C[0], 'r-')
+O1O, = ax1.plot([0, X_O[0]], [0, Y_O[0]], 'b:')
+OC, = ax1.plot([X_O[0], X_C[0]], [Y_O[0], Y_C[0]], 'b:')
+
+
+def anima(i):
+
+    O1O.set_data([0, X_O[i]], [0, Y_O[i]])
+    OC.set_data([X_O[i], X_C[i]], [Y_O[i], Y_C[i]])
+    Circ.set_data(X_O[i] + R * np.cos(Circ_Angle),
+                  Y_O[i] + R * np.sin(Circ_Angle))
+
+    angle = math.atan2(Y_REL[i], X_REL[i])
+    R_Stick_ArrowX, R_Stick_ArrowY = Rot2D(ArrowX, ArrowY, angle)
+    Stick_Arrow.set_data(R_Stick_ArrowX + X_C[i], R_Stick_ArrowY + Y_C[i])
+
+    return O1O, OC, Circ, Stick_Arrow, PointO1
+
+
+anim = FuncAnimation(fig, anima, frames=len(T), interval=20, blit=True)
 
 plt.show()

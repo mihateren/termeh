@@ -1,161 +1,259 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import math
 from scipy.integrate import odeint
+import matplotlib.gridspec as gridspec
 
 
-def SystDiffEq(y, t, m1, m2, a, b, l0, c, g):
-    # y = [phi, psi, phi', psi'] -> dy = [phi', psi', phi'', psi'']
-    dy = np.zeros_like(y)
-    dy[0] = y[2]
-    dy[1] = y[3]
-
-    phi = y[0]
-    psi = y[1]
-    dphi = y[2]
-    dpsi = y[3]
-
-    # a11 * phi'' + a12 * psi'' = b1
-    # a21 * phi'' + a22 * psi'' = b2
-
-    l = np.sqrt(8 * a ** 2 * (1 - np.cos(phi)) +
-                l0 * (l0 - 4 * a * np.sin(phi)))
-    a11 = ((4/3) * m1 + m2) * a
-    a12 = m2 * np.sin(psi - phi)
-    b1 = (-(m1 + m2) * g * np.cos(phi)
-          + c * ((l0 / l) - 1) * (4 * a * np.sin(phi) - 2 * l0 * np.cos(phi))
-          - m2 * b * dpsi ** 2 * np.cos(psi - phi))
-
-    a21 = a * np.sin(psi - phi)
-    a22 = b
-    b2 = - g * np.sin(psi) + a * dphi ** 2 * np.cos(psi - phi)
-
-    detA = a11 * a22 - a12 * a21
-    detA1 = b1 * a22 - a12 * b2
-    detA2 = a11 * b2 - b1 * a21
-
-    dy[2] = detA1 / detA
-    dy[3] = detA2 / detA
-
-    return dy
+def Rot2D(X, Y, Alpha):
+    RX = X * np.cos(Alpha) - Y * np.sin(Alpha)
+    RY = X * np.sin(Alpha) + Y * np.cos(Alpha)
+    return RX, RY
 
 
-# Дано:
-a = b = l0 = 1
-DE = 2 * a
-g = 9.8
-m1 = 50
-m2 = 0.5
-a = b = l0 = 1
-c = 250
-t0 = 0
-phi0 = 0
-psi0 = np.pi / 18
-dphi0 = 0
-dpsi0 = 0
-
-# Задаю функции phi(t) и psi(t)
-
-step = 1000
-
-t = np.linspace(0, 10, step)
-
-y0 = np.array([phi0, psi0, dphi0, dpsi0])
-
-Y = odeint(SystDiffEq, y0, t, (m1, m2, a, b, l0, c, g))
-
-phi = Y[:, 0]
-psi = Y[:, 1]
-dphi = Y[:, 2]
-dpsi = Y[:, 3]
-
-ddphi = np.zeros_like(t)
-for i in np.arange(len(t)):
-    ddphi[i] = SystDiffEq(Y[i], t[i], m1, m2, a, b, l0, c, g)[2]
+m1 = 2.0
+m2 = 1.0
+R = 0.5
+l = 0.25
+M0 = 15.0
+gamma = 3 * math.pi / 2.0
+k = 10.0
+g = 9.81
 
 
-N = m2 * (g * np.cos(psi)
-          + b * dpsi ** 2
-          + a * (ddphi * np.cos(psi - phi)
-                 + dphi ** 2 * np.sin(psi - phi)))
-
-fgrt = plt.figure()
-phiplt = fgrt.add_subplot(3, 1, 1)
-plt.title("phi(t)")
-phiplt.plot(t, phi, color='r')
-psiplt = fgrt.add_subplot(3, 1, 2)
-plt.title("psi(t)")
-psiplt.plot(t, psi)
-nplt = fgrt.add_subplot(3, 1, 3)
-plt.title("N(t)")
-nplt.plot(t, N)
-fgrt.show()
+t0 = 0.0
+phi0 = 0.0
+psi0 = math.pi / 6
+dphi0 = 0.0
+dpsi0 = 0.0
+y0 = [phi0, psi0, dphi0, dpsi0]
 
 
-fig = plt.figure()
-gr = fig.add_subplot(1, 1, 1)
-gr.axis('equal')
+Tmax = 45.0
+Nsteps = 1000
+T = np.linspace(t0, Tmax, Nsteps)
 
 
-# Балка DE
-Xd = 0
-Yd = 0
+def SystDiffEq(y, t, m1, m2, R, l, M0, gamma, k, g):
+    phi, psi, dphi, dpsi = y
 
-Xe = Xd + DE * np.cos(phi)
-Ye = Yd + DE * np.sin(phi)
+    sqrt_Rl = math.sqrt(R**2 - l**2)
+    sin_psi_phi = math.sin(psi - phi)
+    cos_psi_phi = math.cos(psi - phi)
 
-balkaDE = gr.plot([Xd, Xe[0]], [Yd, Ye[0]], color='black', linewidth=5)[0]
-pD = gr.plot(Xd, Yd, marker='o', color='r')[0]
-pE = gr.plot(Xe, Ye, marker='o', color='r')[0]
+    A11 = (2 * m1 + m2) * R**2
+    A12 = m2 * R * sqrt_Rl * cos_psi_phi
+    A21 = sqrt_Rl * R * cos_psi_phi
+    A22 = R**2 - (2.0 / 3.0) * l**2
 
-# Пружина
+    B1 = M0 * math.sin(gamma * t) - k * dphi - (m1 + m2) * g * R * \
+        math.sin(phi) + m2 * R * sqrt_Rl * (dpsi**2) * sin_psi_phi
+    B2 = -sqrt_Rl * (R * (dphi**2) * sin_psi_phi + g * math.sin(psi))
 
-Xc = DE
-Yc = l0
+    detA = A11 * A22 - A12 * A21
+    detA1 = B1 * A22 - A12 * B2
+    detA2 = A11 * B2 - B1 * A21
 
-pC = gr.plot(Xc, Yc, marker='o', color='r')[0]
+    ddphi = detA1 / detA
+    ddpsi = detA2 / detA
 
-
-def get_spring(coils, width, start, end):
-    start, end = np.array(start).reshape((2,)), np.array(end).reshape((2,))
-    len = np.linalg.norm(np.subtract(end, start))
-    u_t = np.subtract(end, start) / len
-    u_n = np.array([[0, -1], [1, 0]]).dot(u_t)
-    spring_coords = np.zeros((2, coils + 2))
-    spring_coords[:, 0], spring_coords[:, -1] = start, end
-    normal_dist = np.sqrt(max(0, width ** 2 - (len ** 2 / coils ** 2))) / 2
-    for i in np.arange(1, coils + 1):
-        spring_coords[:, -i] = (start
-                                + ((len * (2 * i - 1) * u_t) / (2 * coils))
-                                + (normal_dist * (-1) ** i * u_n))
-    return spring_coords[0, 2:], spring_coords[1, 2:]
+    return [dphi, dpsi, ddphi, ddpsi]
 
 
-pS = gr.plot(*get_spring(70, 0.1, [Xe[0], Ye[0]], [Xc, Yc]), color='black')[0]
-
-# Стержень AB
-
-Xa = Xd + DE / 2 * np.cos(phi)
-Ya = Yd + DE / 2 * np.sin(phi)
-
-Xb = Xa + b * np.cos(psi - np.pi / 2)
-Yb = Ya + b * np.sin(psi - np.pi / 2)
-
-sterjenAB = gr.plot([Xa[0], Xb[0]], [Ya[0], Yb[0]],
-                    color='black', linewidth=1)[0]
-pA = gr.plot(Xa, Ya, marker='o', color='r')[0]
-pB = gr.plot(Xb, Yb, marker='o', color='black', markersize=20)[0]
+Y = odeint(SystDiffEq, y0, T, args=(m1, m2, R, l, M0, gamma, k, g))
+phi_array = Y[:, 0]
+psi_array = Y[:, 1]
+dphi_array = Y[:, 2]
+dpsi_array = Y[:, 3]
 
 
-def run(i):
-    balkaDE.set_data([Xd, Xe[i]], [Yd, Ye[i]])
-    pE.set_data(Xe[i], Ye[i])
-    pS.set_data(*get_spring(70, 0.1, [Xe[i], Ye[i]], [Xc, Yc]))
-    pA.set_data(Xa[i], Ya[i])
-    pB.set_data(Xb[i], Yb[i])
-    sterjenAB.set_data([Xa[i], Xb[i]], [Ya[i], Yb[i]])
+ddphi_array = np.zeros(Nsteps)
+ddpsi_array = np.zeros(Nsteps)
+for i in range(Nsteps):
+    y_i = Y[i]
+    t_i = T[i]
+    derivs = SystDiffEq(y_i, t_i, m1, m2, R, l, M0, gamma, k, g)
+    ddphi_array[i] = derivs[2]
+    ddpsi_array[i] = derivs[3]
 
 
-anim = FuncAnimation(fig, run, frames=step, interval=1)
+Nx = - (m1 + m2) * R * (ddphi_array * np.cos(phi_array) - dphi_array**2 * np.sin(phi_array)) \
+     - m2 * (R**2 - l**2) * (ddpsi_array * np.cos(psi_array) -
+                             dpsi_array**2 * np.sin(psi_array))
 
+Ny = - (m1 + m2) * R * (ddphi_array * np.sin(phi_array) + dphi_array**2 * np.cos(phi_array)) \
+     - (m1 + m2) * g \
+     - m2 * (R**2 - l**2) * (ddpsi_array * np.sin(psi_array) +
+                             dpsi_array**2 * np.cos(psi_array))
+
+
+x_O = -R * np.sin(phi_array)
+y_O = R * np.cos(phi_array)
+
+r = math.sqrt(R**2 - l**2)
+
+x_C = x_O - r * np.sin(psi_array)
+y_C = y_O + r * np.cos(psi_array)
+
+x_rel = -r * np.sin(psi_array)
+y_rel = r * np.cos(psi_array)
+
+
+x_O_rot = -x_O
+y_O_rot = -y_O
+x_C_rot = -x_C
+y_C_rot = -y_C
+x_rel_rot = -x_rel
+y_rel_rot = -y_rel
+
+
+fig = plt.figure(figsize=(16, 8))
+gs = gridspec.GridSpec(1, 2, width_ratios=[3, 2], wspace=0.3)
+
+
+ax_anim = plt.subplot(gs[0])
+
+ax_anim.set_xlim(-2.5, 2.5)
+ax_anim.set_ylim(-3, 3)
+ax_anim.set_xlabel('ось x')
+ax_anim.set_ylabel('ось y')
+ax_anim.set_aspect('equal')
+ax_anim.set_title('Анимация системы')
+
+
+PointO1, = ax_anim.plot([0], [0], 'bo')
+Circ_Angle = np.linspace(0, 2 * math.pi, 100)
+Circ, = ax_anim.plot(x_O_rot[0] + R * np.cos(Circ_Angle),
+                     y_O_rot[0] + R * np.sin(Circ_Angle), 'g')
+
+ArrowX = np.array([0, 0, 0])
+ArrowY = np.array([-l, 0, l])
+initial_angle = math.atan2(y_rel_rot[0], x_rel_rot[0])
+R_Stick_ArrowX, R_Stick_ArrowY = Rot2D(ArrowX, ArrowY, initial_angle)
+Stick_Arrow, = ax_anim.plot(
+    R_Stick_ArrowX + x_C_rot[0], R_Stick_ArrowY + y_C_rot[0], 'k-')
+O1O, = ax_anim.plot([0, x_O_rot[0]], [0, y_O_rot[0]], 'b:')
+OC, = ax_anim.plot([x_O_rot[0], x_C_rot[0]], [
+                   y_O_rot[0], y_C_rot[0]], 'b-')
+
+
+gs_plots = gridspec.GridSpecFromSubplotSpec(
+    2, 2, subplot_spec=gs[1], wspace=0.4, hspace=0.6)
+
+
+ax_phi = plt.subplot(gs_plots[0, 0])
+ax_phi.set_xlim(t0, 10)
+ax_phi.set_ylim(min(phi_array) * 1.1, max(phi_array) * 1.1)
+ax_phi.set_xlabel('Время (с)')
+ax_phi.set_ylabel('phi (рад)')
+line_phi, = ax_phi.plot([], [], 'r-')
+ax_phi.grid(True)
+
+
+ax_psi = plt.subplot(gs_plots[0, 1])
+ax_psi.set_xlim(t0, 10)
+ax_psi.set_ylim(min(psi_array) * 1.1, max(psi_array) * 1.1)
+ax_psi.set_xlabel('Время (с)')
+ax_psi.set_ylabel('psi (рад)')
+line_psi, = ax_psi.plot([], [], 'b-')
+ax_psi.grid(True)
+
+
+ax_Nx = plt.subplot(gs_plots[1, 0])
+ax_Nx.set_xlim(t0, 10)
+ax_Nx.set_ylim(min(Nx) * 1.1, max(Nx) * 1.1)
+ax_Nx.set_xlabel('Время (с)')
+ax_Nx.set_ylabel('Nx (Н)')
+line_Nx, = ax_Nx.plot([], [], 'm-')
+ax_Nx.grid(True)
+
+
+ax_Ny = plt.subplot(gs_plots[1, 1])
+ax_Ny.set_xlim(t0, 10)
+
+
+padding = 0.1 * max(abs(min(Ny)), abs(max(Ny)))
+ax_Ny.set_ylim(min(Ny) - padding, max(Ny) + padding)
+
+ax_Ny.set_xlabel('Время (с)')
+ax_Ny.set_ylabel('Ny (Н)')
+line_Ny, = ax_Ny.plot([], [], 'c-')
+ax_Ny.grid(True)
+
+
+phi_xdata, phi_ydata = [], []
+psi_xdata, psi_ydata = [], []
+Nx_xdata, Nx_ydata = [], []
+Ny_xdata, Ny_ydata = [], []
+
+
+def anima(i):
+    O1O.set_data([0, x_O_rot[i]], [0, y_O_rot[i]])
+    OC.set_data([x_O_rot[i], x_C_rot[i]], [y_O_rot[i], y_C_rot[i]])
+    Circ.set_data(x_O_rot[i] + R * np.cos(Circ_Angle),
+                  y_O_rot[i] + R * np.sin(Circ_Angle))
+    current_angle = math.atan2(y_rel_rot[i], x_rel_rot[i])
+    R_Stick_ArrowX, R_Stick_ArrowY = Rot2D(ArrowX, ArrowY, current_angle)
+    Stick_Arrow.set_data(
+        R_Stick_ArrowX + x_C_rot[i], R_Stick_ArrowY + y_C_rot[i])
+
+    phi_xdata.append(T[i])
+    phi_ydata.append(phi_array[i])
+    line_phi.set_data(phi_xdata, phi_ydata)
+
+    psi_xdata.append(T[i])
+    psi_ydata.append(psi_array[i])
+    line_psi.set_data(psi_xdata, psi_ydata)
+
+    Nx_xdata.append(T[i])
+    Nx_ydata.append(Nx[i])
+    line_Nx.set_data(Nx_xdata, Nx_ydata)
+
+    Ny_xdata.append(T[i])
+    Ny_ydata.append(Ny[i])
+    line_Ny.set_data(Ny_xdata, Ny_ydata)
+
+    window = 10
+    if T[i] > window:
+
+        ax_phi.set_xlim(T[i] - window, T[i])
+        ax_psi.set_xlim(T[i] - window, T[i])
+        ax_Nx.set_xlim(T[i] - window, T[i])
+        ax_Ny.set_xlim(T[i] - window, T[i])
+
+        while phi_xdata and phi_xdata[0] < T[i] - window:
+            phi_xdata.pop(0)
+            phi_ydata.pop(0)
+        line_phi.set_data(phi_xdata, phi_ydata)
+
+        while psi_xdata and psi_xdata[0] < T[i] - window:
+            psi_xdata.pop(0)
+            psi_ydata.pop(0)
+        line_psi.set_data(psi_xdata, psi_ydata)
+
+        while Nx_xdata and Nx_xdata[0] < T[i] - window:
+            Nx_xdata.pop(0)
+            Nx_ydata.pop(0)
+        line_Nx.set_data(Nx_xdata, Nx_ydata)
+
+        while Ny_xdata and Ny_xdata[0] < T[i] - window:
+            Ny_xdata.pop(0)
+            Ny_ydata.pop(0)
+        line_Ny.set_data(Ny_xdata, Ny_ydata)
+
+    else:
+
+        ax_phi.set_xlim(t0, window)
+        ax_psi.set_xlim(t0, window)
+        ax_Nx.set_xlim(t0, window)
+        ax_Ny.set_xlim(t0, window)
+
+    return O1O, OC, Circ, Stick_Arrow, line_phi, line_psi, line_Nx, line_Ny
+
+
+anim = FuncAnimation(fig, anima,
+                     frames=Nsteps, interval=20, blit=False)
+
+plt.tight_layout()
 plt.show()
